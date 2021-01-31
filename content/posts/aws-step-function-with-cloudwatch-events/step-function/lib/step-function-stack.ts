@@ -21,6 +21,7 @@ export class StepFunctionStack extends cdk.Stack {
       this,
       "Request Document Signature",
       {
+        functionName: "requestDocumentSignature",
         entry: __dirname + "/sign-document.ts",
         handler: "requestDocumentSignature",
         environment: {
@@ -33,6 +34,7 @@ export class StepFunctionStack extends cdk.Stack {
       this,
       "Complete Document Signature",
       {
+        functionName: "completeSignatureRequest",
         entry: __dirname + "/sign-document.ts",
         handler: "completeSignatureRequest",
         environment: {
@@ -56,6 +58,7 @@ export class StepFunctionStack extends cdk.Stack {
     });
 
     const signDocument = new lambda.NodejsFunction(this, "Sign Document", {
+      functionName: "signDocument",
       entry: __dirname + "/sign-document.ts",
       handler: "signDocument",
     });
@@ -86,5 +89,38 @@ export class StepFunctionStack extends cdk.Stack {
         resources: [stateMachine.stateMachineArn],
       })
     );
+
+    // Lambdas after creating state machine
+    const signDocumentDuplicate = new lambda.NodejsFunction(
+      this,
+      "Sign Document Duplicate",
+      {
+        functionName: stateMachine.stateMachineName,
+        entry: __dirname + "/sign-document.ts",
+        handler: "signDocument",
+      }
+    );
+
+    new tasks.LambdaInvoke(this, "Harv Signature", {
+      lambdaFunction: signDocumentDuplicate,
+      outputPath: "$.Payload",
+      payload: sfn.TaskInput.fromObject({
+        signer: "Alice",
+        documentId: Data.stringAt("$.documentId"),
+      }),
+    });
+
+    this.addTransform("DatadogServerless");
+
+    new cdk.CfnMapping(this, "Datadog", {
+      mapping: {
+        Parameters: {
+          nodeLayerVersion: "44",
+          stackName: this.stackName,
+          service: "harvDdMacroService",
+          env: "dev",
+        },
+      },
+    });
   }
 }
